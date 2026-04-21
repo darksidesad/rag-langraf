@@ -1,0 +1,25 @@
+# Entorno virtual
+env/
+venv/
+.venv/
+
+# Variables de entorno con secretos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Documentos subidos (se regeneran)
+docs/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

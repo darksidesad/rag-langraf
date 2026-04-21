@@ -1,0 +1,629 @@
+---
+// index.astro - Dashboard Completo del Agente MTTR
+---
+
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width" />
+  <meta name="generator" content={Astro.generator} />
+  <meta name="description" content="Agente autónomo de soporte técnico con RAG para reducir MTTR en infraestructuras críticas" />
+  <title>Agent-Ops | MTTR Reducer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <h1>Agent-Ops | MTTR</h1>
+    </div>
+    <div class="header-right">
+      <div class="cloud-badge" id="cloudStatus">
+        <span class="cloud-dot"></span>
+        Conectando...
+      </div>
+      <button class="tab-btn active" data-tab="chat" onclick="switchTab('chat')">💬 Chat</button>
+      <button class="tab-btn" data-tab="docs" onclick="switchTab('docs')">📄 Documentos</button>
+      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ Config</button>
+    </div>
+  </header>
+
+  <div class="app-container">
+    <!-- ==================== TAB: CHAT ==================== -->
+    <div class="tab-content active" id="tab-chat">
+      <div class="chat-layout">
+        <div class="chat-main">
+          <div class="chat-container" id="chat">
+            <div class="message agent">
+              <div class="message-info"><span class="status-dot ok"></span> Agente Autónomo</div>
+              Hola, soy tu asistente de soporte técnico. Accedo a los manuales de infraestructura para reducir tu MTTR. ¿En qué te puedo ayudar?
+            </div>
+          </div>
+
+          <div class="input-area">
+            <div class="input-wrapper">
+              <select id="modelSelect" class="styled-select" disabled>
+                <option value="">Cargando modelos...</option>
+              </select>
+              <input type="file" id="fileUpload" style="display: none" accept=".pdf,.docx,.txt,.md" />
+              <button class="icon-btn" onclick="document.getElementById('fileUpload').click()" title="Subir manual">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </button>
+              <input type="text" id="prompt" placeholder="Escribe tu pregunta técnica..." autocomplete="off" />
+              <button id="sendBtn" disabled>Enviar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL LATERAL: Métricas -->
+        <div class="metrics-panel" id="metricsPanel">
+          <h3>📊 Métricas del Pipeline</h3>
+          <div id="metricsContent">
+            <p class="metrics-empty">Haz una consulta para ver las métricas del pipeline RAG aquí.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB: DOCUMENTOS ==================== -->
+    <div class="tab-content" id="tab-docs">
+      <div class="docs-panel">
+        <div class="docs-header">
+          <h2>📄 Base de Conocimiento (Qdrant)</h2>
+          <div class="docs-actions">
+            <button class="btn-secondary" onclick="loadDocuments()">🔄 Actualizar</button>
+            <button class="btn-danger" onclick="deleteAllDocuments()">🗑️ Vaciar colección</button>
+          </div>
+        </div>
+        <div id="docsContent" class="docs-content">
+          <p class="metrics-empty">Cargando documentos...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB: CONFIGURACIÓN ==================== -->
+    <div class="tab-content" id="tab-settings">
+      <div class="settings-panel">
+        <h2>⚙️ Configuración</h2>
+
+        <!-- API Key -->
+        <div class="settings-card">
+          <h3>🔑 Ollama Cloud API Key</h3>
+          <p class="settings-desc">Ingresa tu propia API key de Ollama Cloud. Si la dejas vacía, se usará la key del servidor.</p>
+          <div class="settings-row">
+            <input type="password" id="apiKeyInput" placeholder="Ej. 241f4e03..." class="settings-input" />
+            <button class="btn-primary" onclick="validateAndSaveKey()">Validar y Guardar</button>
+          </div>
+          <div id="keyStatus" class="key-status"></div>
+        </div>
+
+        <!-- Umbral de similitud -->
+        <div class="settings-card">
+          <h3>📏 Umbral de Distancia (Similitud)</h3>
+          <p class="settings-desc">Controla qué tan similares deben ser los documentos para ser aceptados. Menor = más estricto.</p>
+          <div class="slider-container">
+            <input type="range" id="thresholdSlider" min="0.1" max="1.0" step="0.05" value="0.40" oninput="updateThresholdLabel()" />
+            <span id="thresholdLabel" class="slider-label">0.40</span>
+          </div>
+          <div class="threshold-hints">
+            <span>🔒 Estricto (0.1)</span>
+            <span>⚖️ Balanceado (0.4)</span>
+            <span>🔓 Permisivo (1.0)</span>
+          </div>
+        </div>
+
+        <!-- Info de conexión -->
+        <div class="settings-card">
+          <h3>🌐 Estado de Conexiones</h3>
+          <div id="connectionInfo" class="connection-info">Cargando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    :root {
+      --bg-dark: #0b1120;
+      --bg-card: #151d2e;
+      --bg-elevated: #1a2438;
+      --border: rgba(255,255,255,0.08);
+      --text-main: #e2e8f0;
+      --text-muted: #64748b;
+      --text-bright: #f8fafc;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --purple: #8b5cf6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-right { display: flex; align-items: center; gap: 0.5rem; }
+
+    .cloud-badge {
+      display: flex; align-items: center; gap: 0.35rem;
+      background: rgba(16,185,129,0.12); color: var(--accent);
+      padding: 0.3rem 0.75rem; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600;
+    }
+    .cloud-badge.error { background: rgba(239,68,68,0.12); color: var(--error); }
+    .cloud-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+    .cloud-badge.error .cloud-dot { animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+    /* TABS */
+    .tab-btn {
+      background: transparent; color: var(--text-muted); border: 1px solid transparent;
+      padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.8rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s; font-family: inherit;
+    }
+    .tab-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
+    .tab-btn.active { color: var(--primary); border-color: var(--primary); background: rgba(59,130,246,0.08); }
+
+    .app-container { flex: 1; overflow: hidden; }
+    .tab-content { display: none; height: 100%; }
+    .tab-content.active { display: flex; }
+
+    /* CHAT LAYOUT */
+    .chat-layout { display: flex; height: 100%; width: 100%; }
+    .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    .chat-container {
+      flex: 1; overflow-y: auto; padding: 1.5rem; display: flex;
+      flex-direction: column; gap: 1rem; max-width: 800px;
+      margin: 0 auto; width: 100%;
+    }
+
+    .message {
+      padding: 0.85rem 1.2rem; border-radius: 12px; max-width: 85%;
+      line-height: 1.6; animation: fadeIn 0.25s ease-out; font-size: 0.9rem;
+    }
+    .message.user {
+      background: var(--primary); align-self: flex-end;
+      border-bottom-right-radius: 3px; box-shadow: 0 2px 10px rgba(59,130,246,0.25);
+    }
+    .message.agent {
+      background: var(--bg-card); align-self: flex-start;
+      border-bottom-left-radius: 3px; border: 1px solid var(--border);
+    }
+    .message.escalated { border-color: var(--warning); background: rgba(245,158,11,0.08); }
+    .message-info { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .status-dot.ok { background: var(--accent); }
+    .status-dot.warn { background: var(--warning); }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    /* INPUT AREA */
+    .input-area { padding: 1rem 1.5rem; background: var(--bg-card); border-top: 1px solid var(--border); }
+    .input-wrapper { max-width: 800px; width: 100%; display: flex; gap: 0.5rem; margin: 0 auto; align-items: center; }
+
+    .styled-select {
+      background: var(--bg-dark); color: var(--text-main);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.55rem 0.75rem; font-family: inherit; font-size: 0.8rem;
+      min-width: 145px; cursor: pointer;
+    }
+    .styled-select:disabled { opacity: 0.4; }
+    .styled-select option { background: var(--bg-card); }
+
+    input[type="text"] {
+      flex: 1; padding: 0.75rem 1.2rem; border-radius: 50px;
+      border: 1px solid var(--border); background: rgba(11,17,32,0.7);
+      color: white; font-size: 0.9rem; font-family: inherit; transition: all 0.2s;
+    }
+    input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+
+    button {
+      padding: 0.55rem 1.5rem; border-radius: 50px; background: var(--primary); color: white;
+      border: none; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; gap: 0.4rem; font-family: inherit;
+    }
+    button:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .icon-btn { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 0.55rem 0.75rem; min-width: unset; }
+    .icon-btn:hover { background: rgba(255,255,255,0.12); }
+
+    /* METRICS PANEL */
+    .metrics-panel {
+      width: 340px; background: var(--bg-card); border-left: 1px solid var(--border);
+      overflow-y: auto; padding: 1.25rem; flex-shrink: 0;
+    }
+    .metrics-panel h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-bright); }
+    .metrics-empty { color: var(--text-muted); font-size: 0.82rem; text-align: center; padding: 2rem 0; }
+
+    .metric-section { margin-bottom: 1.25rem; }
+    .metric-section h4 { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.35rem 0; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .metric-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .metric-value.good { color: var(--accent); }
+    .metric-value.warn { color: var(--warning); }
+    .metric-value.bad { color: var(--error); }
+
+    .doc-score-item {
+      padding: 0.5rem; margin-bottom: 0.35rem; border-radius: 6px; font-size: 0.78rem;
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    }
+    .doc-score-item.accepted { border-left: 3px solid var(--accent); }
+    .doc-score-item.rejected { border-left: 3px solid var(--error); opacity: 0.6; }
+    .doc-score-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+    .doc-score-snippet { color: var(--text-muted); font-size: 0.72rem; line-height: 1.4; }
+
+    .hallucination-badge {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+    }
+    .hallucination-badge.grounded { background: rgba(16,185,129,0.12); color: var(--accent); }
+    .hallucination-badge.hallucinated { background: rgba(239,68,68,0.12); color: var(--error); }
+    .hallucination-badge.skipped { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+    .timing-bar {
+      display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 0.3rem;
+    }
+    .timing-segment { height: 100%; border-radius: 2px; min-width: 3px; }
+
+    /* DOCS PANEL */
+    .docs-panel { padding: 1.5rem; max-width: 900px; margin: 0 auto; overflow-y: auto; height: 100%; }
+    .docs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem; }
+    .docs-header h2 { font-size: 1.15rem; font-weight: 700; }
+    .docs-actions { display: flex; gap: 0.5rem; }
+    .docs-content { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .doc-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1rem 1.25rem; transition: border-color 0.2s;
+    }
+    .doc-card:hover { border-color: var(--primary); }
+    .doc-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .doc-card h4 { font-size: 0.9rem; font-weight: 600; }
+    .doc-card .chunk-badge {
+      background: rgba(139,92,246,0.12); color: var(--purple);
+      padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
+    }
+    .doc-card .snippet { color: var(--text-muted); font-size: 0.8rem; line-height: 1.5; margin-top: 0.35rem; }
+
+    /* SETTINGS */
+    .settings-panel { padding: 1.5rem; max-width: 700px; margin: 0 auto; overflow-y: auto; height: 100%; }
+    .settings-panel h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+    .settings-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .settings-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; }
+    .settings-desc { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.85rem; line-height: 1.5; }
+
+    .settings-row { display: flex; gap: 0.5rem; align-items: center; }
+    .settings-input {
+      flex: 1; padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-dark); color: var(--text-main); font-family: inherit; font-size: 0.85rem;
+    }
+    .settings-input:focus { outline: none; border-color: var(--primary); }
+
+    .key-status { margin-top: 0.5rem; font-size: 0.8rem; min-height: 1.2em; }
+
+    .slider-container { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .slider-container input[type="range"] {
+      flex: 1; accent-color: var(--primary); height: 4px; cursor: pointer;
+      -webkit-appearance: none; background: var(--border); border-radius: 2px;
+    }
+    .slider-container input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--primary); cursor: pointer;
+    }
+    .slider-label { font-weight: 700; font-size: 1rem; color: var(--primary); min-width: 2.5rem; text-align: center; }
+    .threshold-hints { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); }
+
+    .connection-info { font-size: 0.82rem; line-height: 1.7; }
+    .connection-info .conn-row { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+    .connection-info .conn-label { color: var(--text-muted); }
+    .connection-info .conn-value { font-weight: 500; }
+
+    .btn-primary { background: var(--primary); }
+    .btn-secondary { background: rgba(255,255,255,0.06); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: var(--error); border: 1px solid rgba(239,68,68,0.2); }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+  </style>
+
+  <script is:inline>
+    // === STATE ===
+    let userApiKey = localStorage.getItem('ollama_api_key') || '';
+    const chat = document.getElementById('chat');
+    const promptInput = document.getElementById('prompt');
+    const sendBtn = document.getElementById('sendBtn');
+    const modelSelect = document.getElementById('modelSelect');
+    const cloudStatus = document.getElementById('cloudStatus');
+    const metricsContent = document.getElementById('metricsContent');
+
+    const BACKEND = window.location.hostname === 'localhost'
+      ? 'http://localhost:8080' : `${window.location.protocol}//${window.location.hostname}:8080`;
+
+    // === TABS ===
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      if (tab === 'docs') loadDocuments();
+      if (tab === 'settings') loadConnectionInfo();
+    }
+
+    // === MODELS ===
+    async function loadModels() {
+      const keyParam = userApiKey ? `?api_key=${encodeURIComponent(userApiKey)}` : '';
+      try {
+        const res = await fetch(`${BACKEND}/models${keyParam}`);
+        if (!res.ok) throw new Error((await res.json()).detail || 'Error');
+        const data = await res.json();
+        modelSelect.innerHTML = '';
+        if (data.models.length === 0) {
+          modelSelect.innerHTML = '<option value="gemma3:27b">gemma3:27b (default)</option>';
+        } else {
+          data.models.forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.name}${m.size_gb ? ` (${m.size_gb}GB)` : ''}`;
+            if (i === 0) opt.selected = true;
+            modelSelect.appendChild(opt);
+          });
+        }
+        cloudStatus.innerHTML = `<span class="cloud-dot"></span> Cloud · ${data.count} modelos`;
+        cloudStatus.className = 'cloud-badge';
+        modelSelect.disabled = false;
+        sendBtn.disabled = false;
+      } catch (err) {
+        modelSelect.innerHTML = '<option value="gemma3:27b">gemma3:27b</option>';
+        modelSelect.disabled = false; sendBtn.disabled = false;
+        cloudStatus.innerHTML = '<span class="cloud-dot"></span> Offline';
+        cloudStatus.className = 'cloud-badge error';
+      }
+    }
+
+    // === CHAT ===
+    function addMessage(text, isUser = false, escalated = false) {
+      const msg = document.createElement('div');
+      msg.className = `message ${isUser ? 'user' : 'agent'} ${escalated ? 'escalated' : ''}`;
+      let header = '';
+      if (!isUser) {
+        const dot = escalated ? 'warn' : 'ok';
+        const title = escalated ? 'Soporte Humano Requerido' : 'Agente Autónomo';
+        header = `<div class="message-info"><span class="status-dot ${dot}"></span> ${title}</div>`;
+      }
+      msg.innerHTML = `${header}<div>${text}</div>`;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function renderMetrics(m) {
+      const totalTime = (m.retrieve_time_ms || 0) + (m.generate_time_ms || 0) + (m.hallucination_time_ms || 0);
+      const rPct = totalTime ? ((m.retrieve_time_ms / totalTime) * 100) : 33;
+      const gPct = totalTime ? ((m.generate_time_ms / totalTime) * 100) : 33;
+      const hPct = totalTime ? ((m.hallucination_time_ms / totalTime) * 100) : 33;
+
+      const hallBadge = m.hallucination_result === 'grounded'
+        ? '<span class="hallucination-badge grounded">✅ Fundamentada</span>'
+        : m.hallucination_result === 'hallucinated'
+          ? '<span class="hallucination-badge hallucinated">❌ Alucinación</span>'
+          : '<span class="hallucination-badge skipped">⏭ Omitida</span>';
+
+      let docsHtml = '';
+      (m.doc_scores || []).forEach(d => {
+        docsHtml += `
+          <div class="doc-score-item ${d.accepted ? 'accepted' : 'rejected'}">
+            <div class="doc-score-header">
+              <span>${d.accepted ? '✅' : '❌'} ${d.source}</span>
+              <span class="metric-value ${d.accepted ? 'good' : 'bad'}">${d.score}</span>
+            </div>
+            <div class="doc-score-snippet">${d.snippet}</div>
+          </div>`;
+      });
+
+      metricsContent.innerHTML = `
+        <div class="metric-section">
+          <h4>⏱ Tiempos</h4>
+          <div class="timing-bar">
+            <div class="timing-segment" style="width:${rPct}%;background:var(--primary)" title="Retrieve: ${m.retrieve_time_ms}ms"></div>
+            <div class="timing-segment" style="width:${gPct}%;background:var(--accent)" title="Generate: ${m.generate_time_ms}ms"></div>
+            <div class="timing-segment" style="width:${hPct}%;background:var(--purple)" title="Hallucination: ${m.hallucination_time_ms}ms"></div>
+          </div>
+          <div class="metric-row"><span>🔍 Retrieve</span><span class="metric-value">${m.retrieve_time_ms}ms</span></div>
+          <div class="metric-row"><span>🤖 Generate</span><span class="metric-value">${m.generate_time_ms}ms</span></div>
+          <div class="metric-row"><span>🧪 Hallucination</span><span class="metric-value">${m.hallucination_time_ms}ms</span></div>
+          <div class="metric-row"><span><b>Total</b></span><span class="metric-value">${totalTime.toFixed(0)}ms</span></div>
+        </div>
+        <div class="metric-section">
+          <h4>🧪 Verificación de Alucinaciones</h4>
+          <div style="margin-bottom:0.4rem">${hallBadge}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.4">${m.hallucination_detail || ''}</div>
+        </div>
+        <div class="metric-section">
+          <h4>📄 Documentos (${m.docs_accepted}/${m.total_docs_found} aceptados, umbral ≤ ${m.distance_threshold})</h4>
+          ${docsHtml || '<p class="metrics-empty">Sin documentos</p>'}
+        </div>
+        <div class="metric-section">
+          <h4>🏷 Modelo</h4>
+          <div class="metric-row"><span>Modelo</span><span class="metric-value">${m.model_used}</span></div>
+        </div>`;
+    }
+
+    async function handleSend() {
+      const question = promptInput.value.trim();
+      if (!question) return;
+      addMessage(question, true);
+      promptInput.value = '';
+      sendBtn.disabled = true;
+      const threshold = parseFloat(document.getElementById('thresholdSlider').value);
+
+      try {
+        const res = await fetch(`${BACKEND}/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            model_name: modelSelect.value,
+            api_key: userApiKey || null,
+            max_distance: threshold,
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          addMessage(data.response, false, data.escalated);
+          if (data.metrics) renderMetrics(data.metrics);
+        } else {
+          addMessage(`❌ ${data.detail || 'Error'}`, false, true);
+        }
+      } catch (err) {
+        addMessage('Error de conexión con el backend.', false, true);
+      }
+      sendBtn.disabled = false;
+    }
+
+    // === FILE UPLOAD ===
+    document.getElementById('fileUpload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { addMessage('❌ Archivo > 10 MB', false, true); return; }
+      const fd = new FormData(); fd.append('file', file);
+      try {
+        const res = await fetch(`${BACKEND}/upload`, { method: 'POST', body: fd });
+        const data = await res.json();
+        addMessage(res.ok ? `📂 ${data.message} (${data.chunks} fragmentos)` : `❌ ${data.detail}`, false, !res.ok);
+      } catch { addMessage('Error subiendo archivo.', false, true); }
+      e.target.value = '';
+    });
+
+    // === DOCUMENTS TAB ===
+    async function loadDocuments() {
+      const el = document.getElementById('docsContent');
+      try {
+        const res = await fetch(`${BACKEND}/documents`);
+        const data = await res.json();
+        if (!data.collection_exists) {
+          el.innerHTML = '<p class="metrics-empty">La colección no existe aún. Sube un documento para crearla.</p>';
+          return;
+        }
+        if (data.documents.length === 0) {
+          el.innerHTML = '<p class="metrics-empty">No hay documentos indexados.</p>';
+          return;
+        }
+        el.innerHTML = `<div class="metric-row" style="margin-bottom:1rem">
+          <span>Total de fragmentos</span><span class="metric-value">${data.total_chunks}</span>
+        </div>` +
+        data.documents.map(d => `
+          <div class="doc-card">
+            <div class="doc-card-header">
+              <h4>📄 ${d.source}</h4>
+              <span class="chunk-badge">${d.chunks} chunks</span>
+            </div>
+            ${d.snippets.map(s => `<div class="snippet">${s}</div>`).join('')}
+          </div>`).join('');
+      } catch (err) {
+        el.innerHTML = `<p class="metrics-empty">Error: ${err.message}</p>`;
+      }
+    }
+
+    async function deleteAllDocuments() {
+      if (!confirm('¿Eliminar TODOS los documentos de la base de conocimiento?')) return;
+      try {
+        const res = await fetch(`${BACKEND}/documents`, { method: 'DELETE' });
+        const data = await res.json();
+        addMessage(res.ok ? `🗑️ ${data.message}` : `❌ ${data.detail}`, false, !res.ok);
+        loadDocuments();
+      } catch { addMessage('Error eliminando colección.', false, true); }
+    }
+
+    // === SETTINGS ===
+    async function validateAndSaveKey() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      const status = document.getElementById('keyStatus');
+      if (!key) { status.innerHTML = '<span style="color:var(--warning)">⚠️ Key vacía — se usará la del servidor.</span>'; userApiKey = ''; localStorage.removeItem('ollama_api_key'); loadModels(); return; }
+      status.innerHTML = '<span style="color:var(--text-muted)">Validando...</span>';
+      try {
+        const res = await fetch(`${BACKEND}/validate-key`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: key })
+        });
+        const data = await res.json();
+        if (data.valid) {
+          userApiKey = key;
+          localStorage.setItem('ollama_api_key', key);
+          status.innerHTML = `<span style="color:var(--accent)">✅ Key válida — ${data.models_available} modelos disponibles.</span>`;
+          loadModels();
+        } else {
+          status.innerHTML = `<span style="color:var(--error)">❌ Key inválida: ${data.error}</span>`;
+        }
+      } catch { status.innerHTML = '<span style="color:var(--error)">❌ Error de conexión.</span>'; }
+    }
+
+    function updateThresholdLabel() {
+      document.getElementById('thresholdLabel').textContent = parseFloat(document.getElementById('thresholdSlider').value).toFixed(2);
+    }
+
+    async function loadConnectionInfo() {
+      const el = document.getElementById('connectionInfo');
+      try {
+        const res = await fetch(`${BACKEND}/health`);
+        const data = await res.json();
+        el.innerHTML = `
+          <div class="conn-row"><span class="conn-label">Backend</span><span class="conn-value" style="color:var(--accent)">✅ Online</span></div>
+          <div class="conn-row"><span class="conn-label">Ollama URL</span><span class="conn-value">${data.ollama_url}</span></div>
+          <div class="conn-row"><span class="conn-label">Ollama Cloud</span><span class="conn-value">${data.ollama_cloud ? '✅ Activo' : '❌ Sin API Key'}</span></div>
+          <div class="conn-row"><span class="conn-label">Qdrant</span><span class="conn-value">${data.qdrant_url}</span></div>
+          <div class="conn-row"><span class="conn-label">Key del usuario</span><span class="conn-value">${userApiKey ? '🔑 Configurada' : '— Usando servidor'}</span></div>`;
+      } catch { el.innerHTML = '<span style="color:var(--error)">❌ Backend no disponible</span>'; }
+    }
+
+    // === EVENT LISTENERS ===
+    sendBtn.addEventListener('click', handleSend);
+    promptInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSend(); });
+
+    // === INIT ===
+    if (userApiKey) document.getElementById('apiKeyInput').value = userApiKey;
+    loadModels();
+  </script>
+</body>
+</html>

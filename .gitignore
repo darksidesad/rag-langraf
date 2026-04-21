@@ -1,0 +1,36 @@
+# Dependencias
+node_modules/
+backend/env/
+backend/venv/
+backend/.venv/
+
+# Secretos
+backend/.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Documentos subidos (runtime)
+backend/docs/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker data local
+docker_data/
+
+# Astro
+frontend/.astro/
+
+# Archivos temporales
+*.resolved
+backend/test_cloud.py
