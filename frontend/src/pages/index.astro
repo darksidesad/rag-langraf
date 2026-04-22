@@ -380,7 +380,8 @@
     const metricsContent = document.getElementById('metricsContent');
 
     const BACKEND = window.location.hostname === 'localhost'
-      ? 'http://localhost:8080' : `${window.location.protocol}//${window.location.hostname}:8080`;
+      ? 'http://localhost:8080'
+      : 'https://proyectos-lanchinlan-back.licndb.easypanel.host';
 
     // === TABS ===
     function switchTab(tab) {
