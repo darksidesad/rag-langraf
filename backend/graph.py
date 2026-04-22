@@ -30,7 +30,8 @@ def parse_qdrant_url(url: str):
     return host, port, use_https
 
 # Umbral de DISTANCIA máxima configurable desde el frontend
-DEFAULT_MAX_DISTANCE = 0.40
+# Gemini embeddings producen distancias coseno más altas (~0.5-0.8 para docs relevantes)
+DEFAULT_MAX_DISTANCE = 0.85
 
 class GraphState(TypedDict):
     question: str
